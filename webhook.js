@@ -4,33 +4,48 @@ const { createClient } = require('@supabase/supabase-js');
 const app = express();
 app.use(express.json());
 
+// Log that server started
+console.log('🚀 Webhook server starting...');
+
+// Check environment variables
+if (!process.env.SUPABASE_URL) console.error('❌ SUPABASE_URL missing!');
+if (!process.env.SUPABASE_ANON_KEY) console.error('❌ SUPABASE_ANON_KEY missing!');
+
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_ANON_KEY
 );
 
 app.post('/webhook', async (req, res) => {
-  console.log('📨 Webhook received');
+  console.log('📨 Webhook hit!');
   console.log('Event type:', req.body.type);
   
-  const event = req.body;
-  
-  if (event.type === 'checkout.session.completed') {
-    const email = event.data.object.customer_details.email;
-    console.log(`💰 Payment from: ${email}`);
-    
-    // Try to upsert
-    const { data, error } = await supabase
-      .from('users')
-      .upsert({ email, tier: 'pro', subscribed_at: new Date() });
-    
-    if (error) {
-      console.error('❌ Supabase error:', error.message);
-      console.error('Full error:', error);
+  try {
+    if (req.body.type === 'checkout.session.completed') {
+      const email = req.body.data.object.customer_details.email;
+      console.log(`💰 Payment from: ${email}`);
+      
+      // Try to insert/update
+      const { data, error } = await supabase
+        .from('users')
+        .upsert({ 
+          email: email, 
+          tier: 'pro', 
+          subscribed_at: new Date().toISOString() 
+        });
+      
+      if (error) {
+        console.error('❌ DATABASE ERROR:', error.message);
+        console.error('Full error:', JSON.stringify(error, null, 2));
+      } else {
+        console.log(`✅ Success! ${email} is now PRO`);
+        console.log('Response:', data);
+      }
     } else {
-      console.log(`✅ Upserted ${email} to Pro`);
-      console.log('Response data:', data);
+      console.log('⚠️ Ignoring event type:', req.body.type);
     }
+  } catch (err) {
+    console.error('💥 CRASH:', err.message);
   }
   
   res.json({ received: true });
@@ -41,4 +56,8 @@ app.get('/healthz', (req, res) => {
 });
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`✅ Webhook listening on port ${port}`));
+app.listen(port, () => {
+  console.log(`✅ Webhook listening on port ${port}`);
+  console.log(`📡 SUPABASE_URL: ${process.env.SUPABASE_URL ? 'SET' : 'MISSING'}`);
+  console.log(`🔑 SUPABASE_ANON_KEY: ${process.env.SUPABASE_ANON_KEY ? 'SET' : 'MISSING'}`);
+});
