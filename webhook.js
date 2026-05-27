@@ -2,11 +2,38 @@ const express = require('express');
 const app = express();
 app.use(express.json());
 
-// Your Airtable credentials (ALL FILLED IN)
+// Your Airtable credentials
 const AIRTABLE_TOKEN = 'patC6zVFSofyfnQwi.a75220222551de0f20d5f4cdd8bfd630f3a272b0c8c0e488f9a68644398546d8';
 const AIRTABLE_BASE_ID = 'app5RcMj4TSLHraH9';
 const AIRTABLE_TABLE_NAME = 'Users';
 
+// Test endpoint to check if webhook can reach Airtable
+app.get('/test-airtable', async (req, res) => {
+  console.log('🔍 Testing Airtable connection...');
+  try {
+    const response = await fetch('https://api.airtable.com/v0/meta/whoami', {
+      headers: { 
+        'Authorization': `Bearer ${AIRTABLE_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('✅ Airtable connection successful!');
+      res.json({ success: true, message: 'Airtable connection works!', data });
+    } else {
+      const errorText = await response.text();
+      console.error(`❌ Airtable auth error: ${response.status}`);
+      res.json({ success: false, error: `HTTP ${response.status}: ${errorText}` });
+    }
+  } catch (err) {
+    console.error('❌ Cannot reach Airtable:', err.message);
+    res.json({ success: false, error: err.message });
+  }
+});
+
+// Main webhook endpoint
 app.post('/webhook', async (req, res) => {
   console.log('📨 Webhook received');
   console.log('Event type:', req.body.type);
@@ -69,11 +96,12 @@ app.post('/webhook', async (req, res) => {
         console.log(`✅ Success! ${email} is now PRO in Airtable`);
       } else {
         console.error(`❌ Airtable error: ${response.status}`);
-        console.error('Error details:', data);
+        console.error('Error details:', JSON.stringify(data, null, 2));
       }
       
     } catch (err) {
       console.error('❌ Fetch error:', err.message);
+      console.error('Full error:', err);
     }
   }
   
@@ -90,4 +118,6 @@ app.listen(port, () => {
   console.log(`📡 Airtable Base ID: ${AIRTABLE_BASE_ID}`);
   console.log(`🔑 Airtable Token: ${AIRTABLE_TOKEN ? 'SET' : 'MISSING'}`);
   console.log(`📋 Table name: ${AIRTABLE_TABLE_NAME}`);
+  console.log(``);
+  console.log(`🔍 Test endpoint: https://gcisfusion-webhook.onrender.com/test-airtable`);
 });
