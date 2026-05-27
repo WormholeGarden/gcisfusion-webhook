@@ -2,7 +2,7 @@ const express = require('express');
 const app = express();
 app.use(express.json());
 
-// Your Airtable credentials
+// Your Airtable credentials (ALL FILLED IN)
 const AIRTABLE_TOKEN = 'patC6zVFSofyfnQwi.a75220222551de0f20d5f4cdd8bfd630f3a272b0c8c0e488f9a68644398546d8';
 const AIRTABLE_BASE_ID = 'app5RcMj4TSLHraH9';
 const AIRTABLE_TABLE_NAME = 'Users';
@@ -16,16 +16,21 @@ app.post('/webhook', async (req, res) => {
     console.log(`💰 Payment from: ${email}`);
     
     if (!email) {
-      console.error('❌ No email found');
-      return res.json({ received: true });
+      console.error('❌ No email found in webhook');
+      return res.json({ received: true, error: 'no email' });
     }
     
     try {
       // Search for existing user
       const searchUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}?filterByFormula={Email}="${email}"`;
+      
       const searchResponse = await fetch(searchUrl, {
-        headers: { 'Authorization': `Bearer ${AIRTABLE_TOKEN}` }
+        headers: {
+          'Authorization': `Bearer ${AIRTABLE_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
       });
+      
       const searchData = await searchResponse.json();
       
       let recordId = null;
@@ -34,7 +39,7 @@ app.post('/webhook', async (req, res) => {
         console.log(`📝 Found existing record: ${recordId}`);
       }
       
-      // Prepare record
+      // Prepare the record data
       const recordData = {
         records: [{
           id: recordId || undefined,
@@ -47,7 +52,9 @@ app.post('/webhook', async (req, res) => {
       };
       
       // Send to Airtable
-      const response = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`, {
+      const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`;
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${AIRTABLE_TOKEN}`,
@@ -56,24 +63,31 @@ app.post('/webhook', async (req, res) => {
         body: JSON.stringify(recordData)
       });
       
+      const data = await response.json();
+      
       if (response.ok) {
-        console.log(`✅ Success! ${email} is now PRO`);
+        console.log(`✅ Success! ${email} is now PRO in Airtable`);
       } else {
-        const error = await response.text();
-        console.error(`❌ Airtable error ${response.status}: ${error}`);
+        console.error(`❌ Airtable error: ${response.status}`);
+        console.error('Error details:', data);
       }
+      
     } catch (err) {
-      console.error('❌ Error:', err.message);
+      console.error('❌ Fetch error:', err.message);
     }
   }
   
   res.json({ received: true });
 });
 
-app.get('/healthz', (req, res) => res.status(200).send('OK'));
+app.get('/healthz', (req, res) => {
+  res.status(200).send('OK');
+});
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`✅ Webhook listening on port ${port}`);
-  console.log(`📡 Airtable: ${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`);
+  console.log(`📡 Airtable Base ID: ${AIRTABLE_BASE_ID}`);
+  console.log(`🔑 Airtable Token: ${AIRTABLE_TOKEN ? 'SET' : 'MISSING'}`);
+  console.log(`📋 Table name: ${AIRTABLE_TABLE_NAME}`);
 });
